@@ -101,14 +101,32 @@ input,textarea{font:inherit;color:var(--txt);outline:none}
 #toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#000d;color:#fff;padding:9px 18px;border-radius:99px;opacity:0;transition:.25s;pointer-events:none;z-index:40;font-size:14px}
 #toast.on{opacity:1}
 @media(max-width:760px){#app{grid-template-columns:1fr}.main{display:none}body.co .side{display:none}body.co .main{display:flex}#back{display:block}.b{max-width:86%}}
+.note{color:var(--muted);font-size:13px;line-height:1.5;margin:12px 0}
+.note.w{color:#b26a00}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#1f1f1f;border:1px solid #dadce0}
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
 <div id="login"><div class="card">
  <div class="logo">🤖</div>
- <input id="tok" placeholder="Bot token" autocomplete="off" spellcheck="false">
- <button class="btn" id="go">Connect</button><div class="err" id="lerr"></div>
+ <div id="s1">
+  <button class="btn gbtn" id="gsi"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Sign in with Google</button>
+  <p class="note">Your chats are encrypted on this device, then saved in a hidden app folder in your Google Drive.</p>
+ </div>
+ <div id="s2" style="display:none">
+  <p class="note" id="ptitle"></p>
+  <input id="pp" type="password" placeholder="Passphrase" autocomplete="off">
+  <input id="pp2" type="password" placeholder="Repeat passphrase" autocomplete="off">
+  <button class="btn" id="pgo">Continue</button>
+  <p class="note w">If you forget this passphrase, your saved data cannot be recovered.</p>
+ </div>
+ <div id="s3" style="display:none">
+  <input id="tok" placeholder="Bot token" autocomplete="off" spellcheck="false">
+  <button class="btn" id="go">Connect</button>
+ </div>
+ <div class="err" id="lerr"></div>
 </div></div>
 
 <div id="app">
@@ -159,7 +177,6 @@ function fileUrl(fid,mime){
     }finally{delete inflight[fid]}
   })());
 }
-const save=()=>{try{localStorage.setItem('tgm_'+me.id,JSON.stringify(data))}catch(e){}};
 const name=u=>u?([u.first_name,u.last_name].filter(Boolean).join(' ')||u.title||u.username||'Unknown'):'Unknown';
 const tm=ts=>new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
 const dayOf=ts=>{const d=new Date(ts),n=new Date(),y=new Date(Date.now()-864e5);return d.toDateString()===n.toDateString()?'Today':d.toDateString()===y.toDateString()?'Yesterday':d.toLocaleDateString('en-US',{month:'long',day:'numeric'})};
@@ -286,7 +303,7 @@ function popup(items,x,y){
 document.addEventListener('click',()=>$('pop').style.display='none');
 function menu(e){
   e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();
-  popup([{h:'@'+me.username},{t:'✎ New message',f:newDlg},{t:'⬇ Export backup',f:exportData},{t:'⬆ Import backup',f:()=>$('imp').click()},{t:'⎋ Log out',f:logout,d:1}],r.left-150,r.bottom);
+  popup([{h:'@'+me.username+' · ☁ '+(gst||'—')},{t:'☁ Sync now',f:syncNow},{t:'✎ New message',f:newDlg},{t:'⬇ Export backup',f:exportData},{t:'⬆ Import backup',f:()=>$('imp').click()},{t:'⎋ Log out',f:logout,d:1}],r.left-150,r.bottom);
 }
 $('m1').onclick=$('m2').onclick=menu;$('info').onclick=openInfo;
 
@@ -443,25 +460,142 @@ $('imp').onchange=async e=>{
   e.target.value='';
 };
 
-async function connect(t){
+/* ---------- Google sign-in + encrypted Drive sync ---------- */
+const CLIENT_ID='858753759994-8ua0ml83ijp0da32j5jbebk6a1qm39of.apps.googleusercontent.com.apps.googleusercontent.com';
+const SCOPE='https://www.googleapis.com/auth/drive.appdata',FILE='bot-messenger.enc',DRIVE='https://www.googleapis.com/drive/v3/files';
+let gAccess='',gExp=0,gWait=null,gKey=null,gSalt=null,gFileId=null,gText=null,gTimer=0,gBusy=false,gDirty=false,gst='';
+const setSt=t=>{gst=t};
+const b64=b=>{const u=new Uint8Array(b);let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+function step(n){['s1','s2','s3'].forEach((id,i)=>$(id).style.display=i+1===n?'block':'none');$('lerr').textContent=''}
+
+function gAuth(prompt){
+  return new Promise((res,rej)=>{
+    const fail=m=>{const e=new Error(m);e.auth=true;rej(e)};
+    if(!window.google||!google.accounts)return fail('Google library not loaded');
+    google.accounts.oauth2.initTokenClient({
+      client_id:CLIENT_ID,scope:SCOPE,
+      callback:r=>{if(r.error)return fail(r.error_description||r.error);gAccess=r.access_token;gExp=Date.now()+(r.expires_in-60)*1000;res(gAccess)},
+      error_callback:e=>fail('Google sign-in: '+(e.type||'cancelled'))
+    }).requestAccessToken({prompt});
+  });
+}
+const gTok=()=>Date.now()<gExp?Promise.resolve(gAccess):(gWait=gWait||gAuth('').finally(()=>gWait=null));
+async function drive(url,opt={}){
+  const t=await gTok();
+  const r=await fetch(url,Object.assign({},opt,{headers:Object.assign({},opt.headers,{Authorization:'Bearer '+t})}));
+  if(r.status===401){gExp=0;const e=new Error('Google session expired');e.auth=true;throw e}
+  if(!r.ok)throw new Error('Drive error '+r.status);
+  return r;
+}
+async function findFile(){
+  const r=await(await drive(DRIVE+'?spaces=appDataFolder&fields=files(id)&q='+encodeURIComponent("name='"+FILE+"'"))).json();
+  return r.files[0]?r.files[0].id:null;
+}
+
+async function deriveKey(pass,salt){
+  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function gz(bytes,dir){
+  const st=new Blob([bytes]).stream().pipeThrough(dir==='c'?new CompressionStream('gzip'):new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(st).arrayBuffer());
+}
+async function seal(obj){
+  let bytes=new TextEncoder().encode(JSON.stringify(obj)),z=0;
+  if(window.CompressionStream){bytes=await gz(bytes,'c');z=1}
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},gKey,bytes);
+  return JSON.stringify({v:1,z,salt:b64(gSalt),iv:b64(iv),ct:b64(ct)});
+}
+async function unseal(txt,pass){
+  const f=JSON.parse(txt),salt=unb64(f.salt),key=await deriveKey(pass,salt);
+  let bytes=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(f.iv)},key,unb64(f.ct)));
+  if(f.z)bytes=await gz(bytes,'d');
+  const obj=JSON.parse(new TextDecoder().decode(bytes));
+  gSalt=salt;gKey=key;return obj;
+}
+
+async function upload(){
+  const body=await seal({token,data}),bd='bm'+Date.now(),meta=gFileId?{}:{name:FILE,parents:['appDataFolder']};
+  const mp='--'+bd+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bd+'\r\nContent-Type: application/json\r\n\r\n'+body+'\r\n--'+bd+'--';
+  const url='https://www.googleapis.com/upload/drive/v3/files'+(gFileId?'/'+gFileId:'')+'?uploadType=multipart&fields=id';
+  const r=await(await drive(url,{method:gFileId?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+bd},body:mp})).json();
+  gFileId=r.id;
+}
+function save(){if(!gKey)return;gDirty=true;clearTimeout(gTimer);gTimer=setTimeout(flush,4000)}
+async function flush(){
+  while(gBusy)await new Promise(r=>setTimeout(r,200));
+  if(!gKey||!gDirty)return true;
+  gBusy=true;gDirty=false;setSt('saving…');let ok=true,auth=false;
+  try{await upload();setSt('synced')}
+  catch(e){ok=false;gDirty=true;auth=!!e.auth;setSt(auth?'sign in again (Sync now)':'not synced');if(auth)toast('Google session expired — menu → Sync now')}
+  gBusy=false;
+  if(gDirty&&!auth){clearTimeout(gTimer);gTimer=setTimeout(flush,ok?4000:20000)}
+  return ok;
+}
+async function syncNow(){
+  try{if(Date.now()>=gExp)await gAuth('');gDirty=true;toast(await flush()?'Synced to Google Drive':'Sync failed')}
+  catch(e){toast(e.message)}
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&gDirty){clearTimeout(gTimer);flush()}});
+
+$('gsi').onclick=async()=>{
+  $('lerr').textContent='';
+  if(CLIENT_ID.startsWith('YOUR_')){$('lerr').textContent='Set CLIENT_ID in the code first.';return}
+  try{
+    await gAuth('');
+    gFileId=await findFile();
+    gText=gFileId?await(await drive(DRIVE+'/'+gFileId+'?alt=media')).text():null;
+    $('ptitle').textContent=gText?'Enter your passphrase to unlock your saved data.':'Create a passphrase. It encrypts your data before it leaves this device.';
+    $('pp2').style.display=gText?'none':'block';
+    step(2);$('pp').focus();
+  }catch(e){$('lerr').textContent=e.message}
+};
+$('pgo').onclick=async()=>{
+  const p=$('pp').value;$('lerr').textContent='';if(!p)return;
+  $('pgo').disabled=true;
+  try{
+    if(gText){
+      let j;try{j=await unseal(gText,p)}catch(e){throw new Error('Wrong passphrase')}
+      data=j.data&&j.data.chats?j.data:{chats:{},offset:0};
+      if(j.token)await connect(j.token,true);else step(3);
+    }else{
+      if(p.length<8)throw new Error('Use at least 8 characters');
+      if(p!==$('pp2').value)throw new Error('Passphrases do not match');
+      gSalt=crypto.getRandomValues(new Uint8Array(16));gKey=await deriveKey(p,gSalt);
+      step(3);$('tok').focus();
+    }
+  }catch(e){$('lerr').textContent=e.message}
+  $('pgo').disabled=false;
+};
+
+async function connect(t,restored){
   token=t.trim();$('lerr').textContent='';if(!token)return;
   try{
     me=await api('getMe');
-    try{localStorage.setItem('tgm_token',token)}catch(e){}
-    try{data=JSON.parse(localStorage.getItem('tgm_'+me.id))||{chats:{},offset:0}}catch(e){data={chats:{},offset:0}}
+    if(!restored){try{const old=JSON.parse(localStorage.getItem('tgm_'+me.id));if(old&&old.chats)data=old}catch(e){}}
     $('login').style.display='none';$('app').style.display='grid';render();poll();
-  }catch(e){$('lerr').textContent='Connection failed: '+e.message;try{localStorage.removeItem('tgm_token')}catch(_){}}
+    save();
+    if(!restored)flush().then(ok=>{if(ok)try{Object.keys(localStorage).filter(k=>k.startsWith('tgm_')).forEach(k=>localStorage.removeItem(k))}catch(e){}});
+  }catch(e){step(3);$('lerr').textContent='Connection failed: '+e.message}
 }
-function logout(){
+async function logout(){
+  if(!confirm('Log out? Your data stays encrypted in your Google Drive.'))return;
+  clearTimeout(gTimer);
+  if(gDirty&&!await flush()&&!confirm('The latest changes could not be saved to Drive. Log out anyway?'))return;
   polling=false;if(ctrl)ctrl.abort();
-  try{localStorage.removeItem('tgm_token')}catch(e){}
-  token='';active=null;files={};avs={};pend={};for(const k in perms)delete perms[k];$('drawer').classList.remove('on');$('tok').value='';
-  document.body.classList.remove('co');$('app').style.display='none';$('login').style.display='flex';
+  token='';me=null;data={chats:{},offset:0};active=null;files={};avs={};pend={};for(const k in perms)delete perms[k];
+  gKey=gSalt=gFileId=gText=null;gAccess='';gExp=0;gDirty=false;gst='';
+  $('drawer').classList.remove('on');$('tok').value=$('pp').value=$('pp2').value='';$('lerr').textContent='';
+  document.body.classList.remove('co');$('msgs').innerHTML='';$('list').innerHTML='';
+  $('app').style.display='none';$('login').style.display='flex';step(1);
 }
 $('go').onclick=()=>connect($('tok').value);
 $('tok').onkeydown=e=>{if(e.key==='Enter')connect($('tok').value)};
 $('dw').onclick=async()=>{try{await api('deleteWebhook');$('warn').style.display='none';poll()}catch(e){alert(e.message)}};
-try{const t=localStorage.getItem('tgm_token');if(t){$('tok').value=t;connect(t)}}catch(e){}
+$('pp').onkeydown=$('pp2').onkeydown=e=>{if(e.key==='Enter')$('pgo').click()};
+step(1);
 </script>
 </body>
 </html>
