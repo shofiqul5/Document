@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Any file",
+    "type": "dir"
+  },
+  {
+    "name": "Only text",
+    "type": "dir"
+  }
+]

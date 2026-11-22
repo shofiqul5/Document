@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Admission class",
+    "type": "dir"
+  },
+  {
+    "name": "Authenticator",
+    "type": "dir"
+  },
+  {
+    "name": "Encryption",
+    "type": "dir"
+  },
+  {
+    "name": "Gallery",
+    "type": "dir"
+  },
+  {
+    "name": "Hsc GPA Calculator",
+    "type": "dir"
+  },
+  {
+    "name": "HSC Routine 2026",
+    "type": "dir"
+  },
+  {
+    "name": "Just Communicate",
+    "type": "dir"
+  },
+  {
+    "name": "Practical for HSC",
+    "type": "dir"
+  },
+  {
+    "name": "QR code generator",
+    "type": "dir"
+  },
+  {
+    "name": "Telegram bot controller",
+    "type": "dir"
+  }
+]

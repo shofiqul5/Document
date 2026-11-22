@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --bg2: #151a26;
+    --card: #1a2030;
+    --hover: #232b40;
+    --line: rgba(255,255,255,.08);
+    --text: #eef1f8;
+    --muted: #8b95ab;
+    --accent: #6ea8ff;
+    --folder: #ffb53d;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f6fb;
+      --bg2: #e8edfb;
+      --card: #ffffff;
+      --hover: #eef3ff;
+      --line: rgba(20,30,60,.09);
+      --text: #1a2133;
+      --muted: #6b7690;
+      --accent: #2f6fed;
+      --folder: #f0a000;
+      --shadow: 0 10px 30px rgba(40,60,120,.12);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: radial-gradient(1200px 500px at 50% -10%, var(--bg2), var(--bg));
+    background-color: var(--bg);
+    padding: 20px 16px 48px;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .back {
+    flex: none; width: 44px; height: 44px; border-radius: 14px;
+    display: grid; place-items: center;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    text-decoration: none; transition: transform .15s, background .15s;
+  }
+  .back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .back:hover, .back:focus-visible { background: var(--hover); transform: translateX(-2px); outline: none; }
+  .back[hidden] { display: none; }
+  .crumbs { color: var(--muted); font-size: .9rem; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .crumbs::-webkit-scrollbar { display: none; }
+  .crumbs b { color: var(--text); font-weight: 600; }
+
+  .head { margin: 6px 2px 18px; }
+  h1 { font-size: 1.7rem; line-height: 1.2; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .count { margin-top: 4px; color: var(--muted); font-size: .95rem; }
+
+  .search { position: relative; margin-bottom: 16px; }
+  .search svg { position: absolute; left: 16px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+  #q {
+    width: 100%; height: 50px; padding: 0 18px 0 46px;
+    font: inherit; font-size: 16px; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  #q::placeholder { color: var(--muted); }
+  #q:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 14px; min-height: 68px;
+    background: var(--card); color: var(--text); text-decoration: none;
+    border: 1px solid var(--line); border-radius: 18px;
+    transition: transform .15s, background .15s, box-shadow .15s;
+  }
+  .row:hover, .row:focus-visible { background: var(--hover); transform: translateY(-2px); box-shadow: var(--shadow); outline: none; }
+  .badge {
+    flex: none; width: 46px; height: 46px; border-radius: 14px;
+    display: grid; place-items: center;
+    font-size: .68rem; font-weight: 800; letter-spacing: .03em;
+    color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent);
+  }
+  .badge svg { width: 26px; height: 26px; fill: var(--c); }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+  .kind { margin-top: 2px; color: var(--muted); font-size: .82rem; }
+  .chev { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+  .row:hover .chev { transform: translateX(3px); }
+
+  [data-k="dir"]   { --c: var(--folder); }
+  [data-k="pdf"]   { --c: #ff5d5d; }
+  [data-k="img"]   { --c: #34c98b; }
+  [data-k="doc"]   { --c: #5b9dff; }
+  [data-k="code"]  { --c: #a78bfa; }
+  [data-k="media"] { --c: #ff8a4c; }
+  [data-k="zip"]   { --c: #e0b34a; }
+  [data-k="other"] { --c: #8b95ab; }
+
+  .msg { padding: 40px 0; text-align: center; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .row, .back, .chev { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <a class="back" id="back" href="../" hidden aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
+    <div class="crumbs" id="crumbs"></div>
+  </div>
+  <div class="head">
+    <h1 id="title">Files</h1>
+    <div class="count" id="count"></div>
+  </div>
+  <div class="search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="text" placeholder="Search" autocomplete="off" aria-label="Search files">
+  </div>
+  <div class="list" id="list"></div>
+</main>
+
+<script>
+/* এই ফাইলটা index.html নামে যেকোনো ফোল্ডারে রাখো। এটা ওই ফোল্ডারের সব ফাইল ও সাবফোল্ডার দেখায়।
+   যেকোনো হোস্টিংয়ে (Cloudflare, GitHub Pages ইত্যাদি) কাজ করে। */
+const CONFIG = {
+  hideDotFiles: true,
+  hide: ["index.html", "files.json", "generate-files.js", "_headers", "_redirects", "_worker.js", "functions", "node_modules"]
+};
+
+(function () {
+  const listEl = document.getElementById("list");
+  const crumbsEl = document.getElementById("crumbs");
+  const backEl = document.getElementById("back");
+  const titleEl = document.getElementById("title");
+  const countEl = document.getElementById("count");
+  const q = document.getElementById("q");
+
+  let pathname = decodeURIComponent(location.pathname);
+  const lastSeg = pathname.split("/").filter(Boolean).pop() || "";
+  if (lastSeg.includes(".")) pathname = pathname.slice(0, pathname.lastIndexOf("/") + 1);
+  if (!pathname.endsWith("/")) pathname += "/";
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (segments.length) backEl.hidden = false;
+  titleEl.textContent = segments.length ? segments[segments.length - 1] : location.hostname;
+  document.title = titleEl.textContent;
+  crumbsEl.innerHTML = segments.length
+    ? segments.map((s, i) => i === segments.length - 1 ? `<b>${esc(s)}</b>` : esc(s)).join(" / ")
+    : `<b>${esc(location.hostname)}</b>`;
+
+  const KINDS = {
+    pdf: ["pdf"],
+    img: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"],
+    doc: ["doc", "docx", "txt", "md", "rtf", "odt", "ppt", "pptx", "xls", "xlsx", "csv"],
+    code: ["html", "css", "js", "json", "py", "java", "c", "cpp", "php", "xml", "sh", "ts"],
+    media: ["mp3", "wav", "ogg", "m4a", "mp4", "mkv", "webm", "mov", "avi"],
+    zip: ["zip", "rar", "7z", "tar", "gz", "apk"]
+  };
+  function kindOf(item) {
+    if (item.type === "dir") return "dir";
+    const ext = (item.name.split(".").pop() || "").toLowerCase();
+    for (const k in KINDS) if (KINDS[k].includes(ext)) return k;
+    return "other";
+  }
+
+  const folderIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
+  const chev = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+
+  function norm(list) {
+    return list.map(i => typeof i === "string"
+      ? { name: i.replace(/\/$/, ""), type: i.endsWith("/") ? "dir" : "file" }
+      : { name: i.name, type: i.type === "dir" ? "dir" : "file", children: i.children });
+  }
+
+  // ১ম পদ্ধতি: নিজের ফোল্ডার থেকে শুরু করে উপরের দিকে files.json খোঁজা
+  async function fromManifest() {
+    for (let k = segments.length; k >= 0; k--) {
+      const base = "/" + segments.slice(0, k).map(encodeURIComponent).join("/") + (k ? "/" : "");
+      let data;
+      try {
+        const res = await fetch(base + "files.json", { cache: "no-store" });
+        if (!res.ok) continue;
+        data = await res.json();
+      } catch (e) { continue; }
+      if (!Array.isArray(data)) continue;
+
+      let list = norm(data);
+      let ok = true;
+      for (const seg of segments.slice(k)) {
+        const hit = list.find(i => i.type === "dir" && i.name === seg);
+        if (!hit || !Array.isArray(hit.children)) { ok = false; break; }
+        list = norm(hit.children);
+      }
+      if (ok) return list;
+    }
+    throw new Error("no manifest");
+  }
+
+  // ২য় পদ্ধতি: সার্ভারের নিজের directory listing (Apache/nginx autoindex, লোকাল সার্ভার)
+  async function fromListing() {
+    const res = await fetch("./", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    const items = [];
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const h = a.getAttribute("href");
+      if (!h || /^([a-z]+:|\/|\?|#|\.\.)/i.test(h)) return;
+      const name = decodeURIComponent(h.replace(/\/$/, ""));
+      if (!name.includes("/")) items.push({ name, type: h.endsWith("/") ? "dir" : "file" });
+    });
+    if (!items.length) throw new Error("no listing");
+    return items;
+  }
+
+  let all = [];
+
+  function render(items) {
+    if (!items.length) { msg(q.value ? "No results" : "Nothing here"); return; }
+    listEl.innerHTML = items.map(i => {
+      const k = kindOf(i);
+      const ext = i.type === "dir" ? "" : (i.name.includes(".") ? i.name.split(".").pop().toUpperCase().slice(0, 4) : "FILE");
+      const label = i.type === "dir" ? "Folder" : (ext + " file");
+      return `<a class="row" data-k="${k}" href="${encodeURIComponent(i.name)}${i.type === "dir" ? "/" : ""}">` +
+        `<div class="badge">${i.type === "dir" ? folderIcon : esc(ext)}</div>` +
+        `<div class="info"><div class="name">${esc(i.name)}</div><div class="kind">${label}</div></div>${chev}</a>`;
+    }).join("");
+  }
+
+  (async function () {
+    try {
+      let items;
+      try { items = await fromManifest(); } catch (e) { items = await fromListing(); }
+
+      all = items
+        .filter(i => i.name && !(CONFIG.hideDotFiles && i.name.startsWith(".")) && !CONFIG.hide.includes(i.name))
+        .sort((a, b) => (a.type === b.type ? 0 : a.type === "dir" ? -1 : 1) ||
+          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
+      const d = all.filter(i => i.type === "dir").length, f = all.length - d;
+      countEl.textContent = [d && `${d} folder${d > 1 ? "s" : ""}`, f && `${f} file${f > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
+      render(all);
+      q.addEventListener("input", () => {
+        const t = q.value.toLowerCase().trim();
+        render(all.filter(i => i.name.toLowerCase().includes(t)));
+      });
+    } catch (e) {
+      msg("files.json not found. Run: node generate-files.js");
+    }
+  })();
+
+  function msg(t) { listEl.innerHTML = `<div class="msg">${esc(t)}</div>`; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+})();
+</script>
+</body>
+</html>
